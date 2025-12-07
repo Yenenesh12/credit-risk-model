@@ -74,7 +74,7 @@ DVC (Data Version Control)
 
 # Clone repository
 
-git clone https://github.com/yourusername/insurance-risk-analysis.git
+git clone (https://github.com/Saronzeleke/insurance-risk-analysis-week3.git)
 
 cd insurance-risk-analysis
 
