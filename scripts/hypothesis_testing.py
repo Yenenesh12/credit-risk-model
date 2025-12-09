@@ -434,11 +434,7 @@ def main():
     return tester
 
 if __name__ == "__main__":
-    tester = main()"""
-Task 3: Statistical Hypothesis Testing for Insurance Risk Analysis
-Author: Senior Data Scientist
-Date: 2024
-"""
+    tester = main()
 
 import pandas as pd
 import numpy as np
