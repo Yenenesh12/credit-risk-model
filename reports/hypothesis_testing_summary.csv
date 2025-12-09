@@ -1,0 +1,3 @@
+Hypothesis,Claim Frequency p-value,Claim Severity p-value,Conclusion
+Province Risk Differences,0.7937264094662271,0.6068983272506274,FAIL TO REJECT
+Gender Risk Differences,0.3559363599117604,0.24955623205384037,FAIL TO REJECT
