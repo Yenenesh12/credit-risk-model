@@ -1,5 +1,5 @@
-Metric,Value,Interpretation
-Overall Claim Frequency,0.2958,Proportion of policies with claims
-Average Claim Severity,R2112.00,Average claim amount when claim occurs
-Average Margin per Policy,R6080.63,Average profit per policy
-Overall Loss Ratio,0.1810,Claims paid per premium received
+Hypothesis,Test Used,p-value,Decision,Business Impact
+1. Risk differences across provinces,ANOVA + Chi-square,0.606898,FAIL TO REJECT,High - Regional pricing adjustments needed
+2. Risk differences between zip codes,Chi-square + T-test,0.731505,FAIL TO REJECT,Medium - Geographic segmentation valuable
+3. Margin differences between zip codes,T-test,0.744406,FAIL TO REJECT,High - Profitability varies by location
+4. Risk differences between genders,Chi-square + T-test,0.249556,FAIL TO REJECT,Medium - Consider regulatory implications
