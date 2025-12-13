@@ -30,7 +30,7 @@ wheels/
 env/
 venv/
 ENV/
-my_env/
+my_venv/
 # IDE
 .vscode/
 .idea/
