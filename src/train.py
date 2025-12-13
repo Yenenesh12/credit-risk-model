@@ -321,7 +321,7 @@ def compare_models(X_train: pd.DataFrame, y_train: pd.Series,
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig('../reports/model_comparison.png', dpi=300, bbox_inches='tight')
+    plt.savefig(r'C:/Users/admin/credit-risk-model/reports/model_comparison.png', dpi=300, bbox_inches='tight')
     plt.show()
     
     return results_df
@@ -335,7 +335,7 @@ def main():
                        default=r'C:\Users\admin\credit-risk-model\data\processed\test_data.csv')
     parser.add_argument('--model_type', type=str, default='all',
                        choices=['logistic', 'random_forest', 'gradient_boosting', 'all'])
-    parser.add_argument('--output_dir', type=str, default='../models')
+    parser.add_argument('--output_dir', type=str, default=r'C:\Users\admin\credit-risk-model\models')
     
     args = parser.parse_args()
     
@@ -346,13 +346,12 @@ def main():
     train_data = pd.read_csv(args.train_data)
     test_data = pd.read_csv(args.test_data)
     
-    # ✅ CRITICAL FIXES BELOW ✅
     # 1. Use correct target: FraudResult (not high_risk)
     target_col = 'FraudResult'
     
     # 2. Drop ID columns and invalid targets
     id_cols = ['TransactionId', 'BatchId', 'AccountId', 'SubscriptionId', 'CustomerId']
-    invalid_cols = ['high_risk']  # Remove this fabricated column
+    invalid_cols = ['high_risk']  
     
     drop_cols = id_cols + invalid_cols
     
@@ -373,7 +372,7 @@ def main():
     if args.model_type == 'all':
         model_types = ['logistic', 'random_forest', 'gradient_boosting']
         results = compare_models(X_train, y_train, X_test, y_test, model_types)
-        results.to_csv('../reports/model_comparison.csv', index=False)
+        results.to_csv(r'C:\Users\admin\credit-risk-model\reports\model_comparison.csv', index=False)
         best_model = results.iloc[0]['model_type']
         print(f"\nBest model: {best_model} (ROC-AUC: {results.iloc[0]['roc_auc']:.4f})")
     else:
