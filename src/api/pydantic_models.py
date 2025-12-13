@@ -1,188 +1,144 @@
-from pydantic import BaseModel, Field, validator, confloat, conint
+"""
+Pydantic models for API request/response validation.
+"""
+
+from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
+class RiskLevel(str, Enum):
+    """Risk level enumeration."""
+    LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
 
-class RiskCategory(str, Enum):
-    """Risk categories for predictions."""
-    LOW_RISK = "Low Risk"
-    MEDIUM_RISK = "Medium Risk"
-    HIGH_RISK = "High Risk"
-    VERY_HIGH_RISK = "Very High Risk"
-
-
-class Recommendation(str, Enum):
-    """Recommendation categories."""
-    APPROVE = "Approve"
-    REVIEW = "Review"
-    REQUIRES_DOCUMENTATION = "Requires Additional Documentation"
-    DECLINE = "Decline"
-
-
-class CreditApplication(BaseModel):
-    """Credit application data model."""
+class Transaction(BaseModel):
+    """Transaction data model."""
+    TransactionId: Optional[str] = Field(None, description="Unique transaction identifier")
+    BatchId: Optional[int] = Field(None, description="Batch identifier")
+    AccountId: Optional[int] = Field(None, description="Account identifier")
+    SubscriptionId: Optional[int] = Field(None, description="Subscription identifier")
+    CustomerId: Optional[str] = Field(None, description="Customer identifier")
+    CurrencyCode: Optional[str] = Field(None, description="Currency code")
+    CountryCode: Optional[int] = Field(None, description="Country code")
+    ProviderId: Optional[str] = Field(None, description="Provider identifier")
+    ProductId: Optional[str] = Field(None, description="Product identifier")
+    ProductCategory: Optional[str] = Field(None, description="Product category")
+    ChannelId: Optional[str] = Field(None, description="Channel identifier")
+    Amount: float = Field(..., description="Transaction amount (positive for debit)")
+    Value: Optional[float] = Field(None, description="Absolute transaction value")
+    TransactionStartTime: Optional[str] = Field(None, description="Transaction timestamp")
+    PricingStrategy: Optional[str] = Field(None, description="Pricing strategy")
+    FraudResult: Optional[int] = Field(None, description="Fraud indicator (0 or 1)")
     
-    # Demographic information
-    age: conint(ge=18, le=100) = Field(..., description="Applicant age")
-    income: confloat(ge=0) = Field(..., description="Annual income")
-    debt: confloat(ge=0) = Field(..., description="Total debt")
-    savings: confloat(ge=0) = Field(..., description="Total savings")
+    @validator('Amount')
+    def validate_amount(cls, v):
+        """Validate amount is reasonable."""
+        if abs(v) > 1000000:  # 1 million limit
+            raise ValueError('Amount exceeds reasonable limit')
+        return v
     
-    # Credit information
-    credit_score: conint(ge=300, le=850) = Field(..., description="Credit score")
-    credit_history_length: conint(ge=0) = Field(..., description="Credit history length in years")
-    num_open_accounts: conint(ge=0) = Field(..., description="Number of open credit accounts")
-    num_delinquent_accounts: conint(ge=0) = Field(..., description="Number of delinquent accounts")
-    
-    # Employment information
-    employment_length: conint(ge=0) = Field(..., description="Employment length in years")
-    employment_status: str = Field(..., description="Employment status")
-    
-    # Loan information
-    loan_amount: confloat(ge=0) = Field(..., description="Requested loan amount")
-    loan_term: conint(ge=1, le=30) = Field(..., description="Loan term in years")
-    loan_purpose: str = Field(..., description="Purpose of the loan")
-    
-    # Additional features
-    debt_to_income_ratio: Optional[confloat(ge=0)] = Field(None, description="Debt to income ratio")
-    credit_utilization: Optional[confloat(ge=0, le=1)] = Field(None, description="Credit utilization ratio")
-    payment_history: Optional[confloat(ge=0, le=1)] = Field(None, description="Payment history score")
-    
-    @validator('debt_to_income_ratio', always=True)
-    def calculate_dti(cls, v, values):
-        """Calculate debt-to-income ratio if not provided."""
-        if v is not None:
-            return v
-        
-        if 'income' in values and 'debt' in values:
-            if values['income'] > 0:
-                return values['debt'] / values['income']
-        
-        return 0.0
+    @validator('FraudResult')
+    def validate_fraud_result(cls, v):
+        """Validate fraud result is 0 or 1."""
+        if v is not None and v not in [0, 1]:
+            raise ValueError('FraudResult must be 0 or 1')
+        return v
     
     class Config:
         schema_extra = {
             "example": {
-                "age": 35,
-                "income": 50000,
-                "debt": 10000,
-                "savings": 20000,
-                "credit_score": 720,
-                "credit_history_length": 10,
-                "num_open_accounts": 5,
-                "num_delinquent_accounts": 0,
-                "employment_length": 5,
-                "employment_status": "employed",
-                "loan_amount": 15000,
-                "loan_term": 3,
-                "loan_purpose": "home_improvement",
-                "debt_to_income_ratio": 0.2,
-                "credit_utilization": 0.3,
-                "payment_history": 0.95
+                "TransactionId": "TXN123456",
+                "Amount": 150.75,
+                "Value": 150.75,
+                "ProductCategory": "Electronics",
+                "ChannelId": "Web",
+                "ProviderId": "P1",
+                "CountryCode": 254,
+                "CurrencyCode": "USD",
+                "TransactionStartTime": "2023-10-01T14:30:00"
             }
         }
 
-
-class PredictionRequest(BaseModel):
-    """Request model for single prediction."""
-    
-    application_id: str = Field(..., description="Unique application identifier")
-    application: CreditApplication = Field(..., description="Credit application data")
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "application_id": "APP123456",
-                "application": CreditApplication.Config.schema_extra["example"]
-            }
-        }
-
+class PredictionResult(BaseModel):
+    """Single prediction result."""
+    transaction_id: Optional[str] = Field(None, description="Transaction identifier")
+    prediction: int = Field(..., description="Binary prediction (0=low risk, 1=high risk)")
+    probability: float = Field(..., ge=0, le=1, description="Prediction probability")
+    risk_level: RiskLevel = Field(..., description="Risk level classification")
+    threshold_used: float = Field(..., ge=0, le=1, description="Threshold used for classification")
 
 class PredictionResponse(BaseModel):
-    """Response model for single prediction."""
-    
-    application_id: str = Field(..., description="Unique application identifier")
-    probability_default: confloat(ge=0, le=1) = Field(..., description="Probability of default")
-    prediction: int = Field(..., description="Binary prediction (0=approve, 1=decline)")
-    risk_category: RiskCategory = Field(..., description="Risk category")
-    recommendation: Recommendation = Field(..., description="Recommendation")
-    confidence_interval: List[confloat(ge=0, le=1)] = Field(
-        ..., 
-        description="95% confidence interval for probability"
-    )
-    threshold_used: confloat(ge=0, le=1) = Field(..., description="Threshold used for binary prediction")
+    """Response for single prediction."""
+    transaction_id: str = Field(..., description="Transaction identifier")
+    prediction: int = Field(..., description="Binary prediction")
+    probability: float = Field(..., ge=0, le=1, description="Prediction probability")
+    risk_level: RiskLevel = Field(..., description="Risk level")
+    threshold_used: float = Field(..., ge=0, le=1, description="Threshold used")
     timestamp: str = Field(..., description="Prediction timestamp")
     
     class Config:
         schema_extra = {
             "example": {
-                "application_id": "APP123456",
-                "probability_default": 0.15,
+                "transaction_id": "TXN123456",
                 "prediction": 0,
-                "risk_category": "Low Risk",
-                "recommendation": "Approve",
-                "confidence_interval": [0.12, 0.18],
+                "probability": 0.23,
+                "risk_level": "Low",
                 "threshold_used": 0.5,
-                "timestamp": "2024-01-15T10:30:00Z"
+                "timestamp": "2023-10-01T14:30:00Z"
             }
         }
 
-
-class BatchPredictionItem(BaseModel):
-    """Item for batch prediction request."""
-    
-    application_id: str = Field(..., description="Unique application identifier")
-    application: CreditApplication = Field(..., description="Credit application data")
-
-
 class BatchPredictionRequest(BaseModel):
-    """Request model for batch predictions."""
-    
-    applications: List[BatchPredictionItem] = Field(
-        ..., 
-        description="List of credit applications",
-        max_items=1000  # Limit batch size
-    )
-    
-    @validator('applications')
-    def validate_unique_ids(cls, v):
-        """Validate that all application IDs are unique."""
-        ids = [item.application_id for item in v]
-        if len(ids) != len(set(ids)):
-            raise ValueError("All application IDs must be unique")
-        return v
-
+    """Request for batch prediction."""
+    transactions: List[Transaction] = Field(..., description="List of transactions")
+    callback_url: Optional[str] = Field(None, description="Callback URL for async processing")
 
 class BatchPredictionResponse(BaseModel):
-    """Response model for batch predictions."""
-    
-    predictions: List[PredictionResponse] = Field(..., description="List of predictions")
-
+    """Response for batch prediction."""
+    job_id: str = Field(..., description="Job identifier")
+    status: str = Field(..., description="Job status (processing/completed/failed)")
+    message: str = Field(..., description="Status message")
+    timestamp: str = Field(..., description="Response timestamp")
+    predictions: List[PredictionResult] = Field([], description="List of predictions")
 
 class ModelInfo(BaseModel):
-    """Model information response."""
-    
+    """Model information."""
     model_type: str = Field(..., description="Type of model")
-    threshold: confloat(ge=0, le=1) = Field(..., description="Current prediction threshold")
-    n_features: int = Field(..., description="Number of features")
-    feature_names: List[str] = Field(..., description="Feature names")
-    prediction_stats: Dict[str, Any] = Field(..., description="Prediction statistics")
-    deployment_time: str = Field(..., description="Model deployment timestamp")
-
+    threshold: float = Field(..., description="Current prediction threshold")
+    metrics: Dict[str, Any] = Field(..., description="Model performance metrics")
+    loaded_at: str = Field(..., description="When model was loaded")
 
 class HealthCheck(BaseModel):
     """Health check response."""
-    
     status: str = Field(..., description="Service status")
+    model_loaded: bool = Field(..., description="Whether model is loaded")
+    preprocessor_loaded: bool = Field(..., description="Whether preprocessor is loaded")
     timestamp: str = Field(..., description="Check timestamp")
-    service: str = Field(..., description="Service name")
-    version: str = Field(..., description="API version")
 
+class ThresholdUpdate(BaseModel):
+    """Threshold update request."""
+    threshold: float = Field(..., gt=0, lt=1, description="New threshold value")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "threshold": 0.6
+            }
+        }
 
 class ErrorResponse(BaseModel):
-    """Error response model."""
-    
-    message: str = Field(..., description="Error message")
-    error: Optional[str] = Field(None, description="Error details")
+    """Error response."""
+    error: str = Field(..., description="Error message")
+    detail: Optional[str] = Field(None, description="Error details")
     timestamp: str = Field(..., description="Error timestamp")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "error": "Validation Error",
+                "detail": "Amount exceeds reasonable limit",
+                "timestamp": "2023-10-01T14:30:00Z"
+            }
+        }

@@ -1,413 +1,380 @@
+"""
+Prediction module for credit risk scoring.
+Loads trained models and makes predictions on new data.
+"""
+
 import pandas as pd
 import numpy as np
-import joblib
-from typing import Dict, List, Any, Union, Optional
-import logging
-from datetime import datetime
+import pickle
 import json
-from scipy import stats
-from sklearn.isotonic import IsotonicRegression
-from sklearn.metrics import (accuracy_score, precision_score, 
-                                        recall_score, f1_score, roc_auc_score)
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
+from typing import Dict, List, Tuple, Union, Optional
+import warnings
+warnings.filterwarnings('ignore')
+import shap
 class CreditRiskPredictor:
-    """Credit risk predictor for production inference."""
+    """Credit risk predictor for inference."""
     
-    def __init__(self, 
-                 model_path: str = 'models/best_model.pkl',
-                 preprocessor_path: str = 'models/preprocessor.pkl',
-                 threshold: float = 0.5,
-                 calibration_data_path: Optional[str] = None):
+    def __init__(self, model_path: str = None, preprocessor_path: str = None):
+        """
+        Initialize predictor.
         
-        self.threshold = threshold
-        self.calibration_data_path = calibration_data_path
+        Args:
+            model_path: Path to trained model
+            preprocessor_path: Path to preprocessor
+        """
+        self.model = None
+        self.preprocessor = None
+        self.model_info = {}
         
-        # Load model and preprocessor
-        logger.info(f"Loading model from {model_path}")
-        self.model = joblib.load(model_path)
-        
-        logger.info(f"Loading preprocessor from {preprocessor_path}")
-        self.preprocessor = joblib.load(preprocessor_path)
-        
-        # Load calibration data if provided
-        self.calibration_data = None
-        if calibration_data_path:
-            self._load_calibration_data()
-        
-        # Initialize prediction cache for monitoring
-        self.prediction_cache = []
-        self.cache_size = 1000
-        
-        logger.info("Predictor initialized successfully")
+        if model_path:
+            self.load_model(model_path)
+        if preprocessor_path:
+            self.load_preprocessor(preprocessor_path)
     
-    def _load_calibration_data(self):
-        """Load calibration data for probability calibration."""
-        try:
-            self.calibration_data = pd.read_csv(self.calibration_data_path)
-            logger.info(f"Loaded calibration data with {len(self.calibration_data)} samples")
-        except Exception as e:
-            logger.warning(f"Could not load calibration data: {e}")
-            self.calibration_data = None
+    def load_model(self, model_path: str) -> None:
+        """Load trained model from file."""
+        import joblib
+        model_data = joblib.load(model_path)
+        
+        self.model = model_data['model']
+        self.model_info = {
+            'model_type': model_data['model_type'],
+            'best_params': model_data['best_params'],
+            'metrics': model_data.get('metrics', {}),
+            'threshold': model_data.get('threshold', 0.5),
+            'timestamp': model_data.get('timestamp', 'Unknown')
+        }
+        
+        print(f"Model loaded from {model_path}")
+        print(f"Model type: {self.model_info['model_type']}")
+        print(f"Threshold: {self.model_info['threshold']:.3f}")
+        if 'metrics' in model_data and 'roc_auc' in model_data['metrics']:
+            print(f"ROC-AUC: {model_data['metrics']['roc_auc']:.4f}")
     
-    def _apply_calibration(self, probabilities: np.ndarray) -> np.ndarray:
-        """Apply probability calibration using isotonic regression."""
-        if self.calibration_data is None or len(self.calibration_data) < 100:
-            logger.warning("Insufficient calibration data, using raw probabilities")
-            return probabilities
+    def load_preprocessor(self, preprocessor_path: str) -> None:
+        """Load preprocessor from file."""
+        with open(preprocessor_path, 'rb') as f:
+            preprocessor_dict = pickle.load(f)
         
-        try:
-            
-            # Fit isotonic regression on calibration data
-            X_calib = self.preprocess(self.calibration_data.drop(columns=['target'], errors='ignore'))
-            y_calib = self.calibration_data['target'].values
-            
-            # Get uncalibrated probabilities
-            uncalibrated_probs = self.model.predict_proba(X_calib)[:, 1]
-            
-            # Fit calibrator
-            calibrator = IsotonicRegression(out_of_bounds='clip')
-            calibrator.fit(uncalibrated_probs, y_calib)
-            
-            # Apply calibration
-            calibrated_probs = calibrator.transform(probabilities)
-            
-            logger.info("Applied probability calibration")
-            return calibrated_probs
-        
-        except Exception as e:
-            logger.error(f"Calibration failed: {e}")
-            return probabilities
+        self.preprocessor = preprocessor_dict
+        print(f"Preprocessor loaded from {preprocessor_path}")
     
-    def preprocess(self, data: Union[pd.DataFrame, Dict]) -> pd.DataFrame:
-        """Preprocess input data for prediction."""
+    def preprocess_input(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Preprocess input data for prediction.
         
-        # Convert dict to DataFrame if needed
-        if isinstance(data, dict):
-            if isinstance(data, list):
-                data = pd.DataFrame(data)
-            else:
-                data = pd.DataFrame([data])
+        Args:
+            df: Raw input DataFrame
+            
+        Returns:
+            Preprocessed DataFrame
+        """
+        if self.preprocessor is None:
+            raise ValueError("Preprocessor must be loaded before preprocessing")
         
-        # Store original data for reference
-        self.original_data = data.copy()
+        df = df.copy()
         
-        # Apply preprocessing pipeline
-        try:
-            processed_data = self.preprocessor.transform(data)
-            logger.info(f"Preprocessed data shape: {processed_data.shape}")
-            return processed_data
+        # Load preprocessor components
+        from sklearn.preprocessing import StandardScaler, OneHotEncoder
+        from sklearn.impute import SimpleImputer
         
-        except Exception as e:
-            logger.error(f"Preprocessing failed: {e}")
-            raise
+        # Get feature lists from config
+        config = self.preprocessor.get('config', {})
+        numerical_features = config.get('features', {}).get('numerical', [])
+        categorical_features = config.get('features', {}).get('categorical', [])
+        
+        # Filter to available features only
+        numerical_features = [f for f in numerical_features if f in df.columns]
+        categorical_features = [f for f in categorical_features if f in df.columns]
+        
+        # 1. Handle missing values
+        imputer = self.preprocessor.get('imputer')
+        if imputer:
+            df[numerical_features] = imputer.transform(df[numerical_features])
+        
+        # 2. Handle outliers (winsorizing)
+        preprocessing_config = config.get('preprocessing', {})
+        if preprocessing_config.get('outlier_capping', True):
+            cap_percentile = preprocessing_config.get('cap_percentile', 99)
+            for col in numerical_features:
+                if col in df.columns:
+                    cap_value = df[col].quantile(cap_percentile / 100)
+                    df[col] = np.where(df[col] > cap_value, cap_value, df[col])
+        
+        # 3. Scale numerical features
+        scaler = self.preprocessor.get('scaler')
+        if scaler and preprocessing_config.get('scale_features', True):
+            df[numerical_features] = scaler.transform(df[numerical_features])
+        
+        # 4. Encode categorical features
+        encoder = self.preprocessor.get('encoder')
+        if encoder and preprocessing_config.get('encode_categorical', True) and categorical_features:
+            encoded_array = encoder.transform(df[categorical_features])
+            encoded_df = pd.DataFrame(
+                encoded_array,
+                columns=encoder.get_feature_names_out(categorical_features),
+                index=df.index
+            )
+            
+            # Drop original categorical columns and add encoded ones
+            df = df.drop(columns=categorical_features)
+            df = pd.concat([df, encoded_df], axis=1)
+        
+        # Ensure columns match training data
+        feature_names = self.preprocessor.get('feature_names')
+        if feature_names:
+            # Add missing columns with zeros
+            for col in feature_names:
+                if col not in df.columns:
+                    df[col] = 0
+            
+            # Reorder columns to match training
+            df = df[feature_names]
+        
+        return df
     
-    def predict_proba(self, 
-                     data: Union[pd.DataFrame, Dict],
-                     calibrated: bool = True) -> np.ndarray:
-        """Predict default probabilities."""
+    def predict(self, df: pd.DataFrame, return_proba: bool = False) -> np.ndarray:
+        """
+        Make predictions on input data.
+        
+        Args:
+            df: Input DataFrame (raw or preprocessed)
+            return_proba: Whether to return probability scores
+            
+        Returns:
+            Predictions or probability scores
+        """
+        if self.model is None:
+            raise ValueError("Model must be loaded before prediction")
+        
+        # Check if data needs preprocessing
+        if self.preprocessor is not None:
+            df_processed = self.preprocess_input(df)
+        else:
+            df_processed = df
+        
+        # Make predictions
+        if return_proba:
+            predictions = self.model.predict_proba(df_processed)[:, 1]
+        else:
+            threshold = self.model_info.get('threshold', 0.5)
+            proba = self.model.predict_proba(df_processed)[:, 1]
+            predictions = (proba >= threshold).astype(int)
+        
+        return predictions
+    
+    def predict_with_explanations(self, df: pd.DataFrame, 
+                                 top_features: int = 10) -> pd.DataFrame:
+        """
+        Make predictions with feature importance explanations.
+        
+        Args:
+            df: Input DataFrame
+            top_features: Number of top features to show
+            
+        Returns:
+            DataFrame with predictions and explanations
+        """
+        
+        
+        if self.model is None:
+            raise ValueError("Model must be loaded before prediction")
         
         # Preprocess data
-        processed_data = self.preprocess(data)
-        
-        # Get probabilities
-        try:
-            probabilities = self.model.predict_proba(processed_data)[:, 1]
-            
-            # Apply calibration if requested
-            if calibrated:
-                probabilities = self._apply_calibration(probabilities)
-            
-            return probabilities
-        
-        except Exception as e:
-            logger.error(f"Prediction failed: {e}")
-            raise
-    
-    def predict(self, 
-               data: Union[pd.DataFrame, Dict],
-               threshold: Optional[float] = None,
-               calibrated: bool = True) -> np.ndarray:
-        """Predict binary default classification."""
-        
-        if threshold is None:
-            threshold = self.threshold
-        
-        # Get probabilities
-        probabilities = self.predict_proba(data, calibrated=calibrated)
-        
-        # Apply threshold
-        predictions = (probabilities >= threshold).astype(int)
-        
-        return predictions
-    
-    def predict_with_confidence(self,
-                              data: Union[pd.DataFrame, Dict],
-                              calibrated: bool = True) -> List[Dict]:
-        """Predict with confidence intervals and explanations."""
-        
-        predictions = []
-        probabilities = self.predict_proba(data, calibrated=calibrated)
-        
-        for idx, prob in enumerate(probabilities):
-            # Calculate confidence interval (simplified)
-            alpha = 0.05  # 95% confidence
-            n = len(data) if isinstance(data, pd.DataFrame) else 1
-            se = np.sqrt(prob * (1 - prob) / n)
-            z_score = stats.norm.ppf(1 - alpha/2)
-            
-            confidence_interval = [
-                max(0, prob - z_score * se),
-                min(1, prob + z_score * se)
-            ]
-            
-            # Determine risk category
-            if prob < 0.2:
-                risk_category = "Low Risk"
-                recommendation = "Approve"
-            elif prob < 0.5:
-                risk_category = "Medium Risk"
-                recommendation = "Review"
-            elif prob < 0.8:
-                risk_category = "High Risk"
-                recommendation = "Requires Additional Documentation"
-            else:
-                risk_category = "Very High Risk"
-                recommendation = "Decline"
-            
-            # Get feature importance if available
-            feature_importance = self._get_feature_importance(idx, data)
-            
-            prediction = {
-                'probability_default': float(prob),
-                'prediction': int(prob >= self.threshold),
-                'confidence_interval': [float(ci) for ci in confidence_interval],
-                'risk_category': risk_category,
-                'recommendation': recommendation,
-                'threshold_used': float(self.threshold),
-                'feature_importance': feature_importance,
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            predictions.append(prediction)
-        
-        # Cache predictions for monitoring
-        self._cache_predictions(predictions)
-        
-        return predictions
-    
-    def _get_feature_importance(self, 
-                               idx: int, 
-                               data: Union[pd.DataFrame, Dict]) -> Optional[Dict]:
-        """Get feature importance for a specific prediction."""
-        
-        try:
-            # For tree-based models
-            if hasattr(self.model, 'feature_importances_'):
-                importances = self.model.feature_importances_
-                feature_names = getattr(self.preprocessor, 'get_feature_names', lambda: [])()
-                
-                if len(feature_names) == len(importances):
-                    top_features = sorted(
-                        zip(feature_names, importances),
-                        key=lambda x: x[1],
-                        reverse=True
-                    )[:10]
-                    
-                    return {
-                        'top_features': [
-                            {'feature': feat, 'importance': float(imp)} 
-                            for feat, imp in top_features
-                        ]
-                    }
-            
-            # For linear models
-            elif hasattr(self.model, 'coef_'):
-                coefficients = self.model.coef_[0]
-                feature_names = getattr(self.preprocessor, 'get_feature_names', lambda: [])()
-                
-                if len(feature_names) == len(coefficients):
-                    top_features = sorted(
-                        zip(feature_names, np.abs(coefficients)),
-                        key=lambda x: x[1],
-                        reverse=True
-                    )[:10]
-                    
-                    return {
-                        'top_features': [
-                            {'feature': feat, 'coefficient_magnitude': float(mag)} 
-                            for feat, mag in top_features
-                        ]
-                    }
-        
-        except Exception as e:
-            logger.warning(f"Could not extract feature importance: {e}")
-        
-        return None
-    
-    def _cache_predictions(self, predictions: List[Dict]):
-        """Cache predictions for monitoring and drift detection."""
-        
-        self.prediction_cache.extend(predictions)
-        
-        # Trim cache if it exceeds size limit
-        if len(self.prediction_cache) > self.cache_size:
-            self.prediction_cache = self.prediction_cache[-self.cache_size:]
-    
-    def get_prediction_stats(self) -> Dict:
-        """Get statistics from cached predictions."""
-        
-        if not self.prediction_cache:
-            return {}
-        
-        probs = [p['probability_default'] for p in self.prediction_cache]
-        
-        return {
-            'total_predictions': len(self.prediction_cache),
-            'mean_probability': float(np.mean(probs)),
-            'std_probability': float(np.std(probs)),
-            'approval_rate': float(np.mean([p['prediction'] == 0 for p in self.prediction_cache])),
-            'decline_rate': float(np.mean([p['prediction'] == 1 for p in self.prediction_cache])),
-            'timestamp': datetime.now().isoformat()
-        }
-    
-    def batch_predict(self, 
-                     filepath: str,
-                     output_path: Optional[str] = None,
-                     calibrated: bool = True) -> pd.DataFrame:
-        """Batch prediction from file."""
-        
-        logger.info(f"Starting batch prediction from {filepath}")
-        
-        # Load data
-        data = pd.read_csv(filepath)
-        logger.info(f"Loaded {len(data)} records for batch prediction")
+        if self.preprocessor is not None:
+            df_processed = self.preprocess_input(df)
+        else:
+            df_processed = df
         
         # Get predictions
-        predictions = self.predict_with_confidence(data, calibrated=calibrated)
+        threshold = self.model_info.get('threshold', 0.5)
+        proba = self.model.predict_proba(df_processed)[:, 1]
+        predictions = (proba >= threshold).astype(int)
         
-        # Create results dataframe
-        results = pd.DataFrame(predictions)
+        # Create results DataFrame
+        results = pd.DataFrame({
+            'prediction': predictions,
+            'probability': proba,
+            'risk_level': pd.cut(proba, 
+                               bins=[0, 0.3, 0.7, 1.0],
+                               labels=['Low', 'Medium', 'High'])
+        })
         
-        # Add original data
-        for col in data.columns:
-            if col not in results.columns:
-                results[col] = data[col].values
-        
-        # Save results if output path provided
-        if output_path:
-            results.to_csv(output_path, index=False)
-            logger.info(f"Saved batch predictions to {output_path}")
+        # Add SHAP explanations if available
+        try:
+            # Initialize SHAP explainer
+            if hasattr(self.model, 'predict_proba'):
+                explainer = shap.TreeExplainer(self.model) if hasattr(self.model, 'feature_importances_') else shap.LinearExplainer(self.model, df_processed)
+                shap_values = explainer.shap_values(df_processed)
+                
+                # Get top features for each prediction
+                for i in range(min(10, len(df))):  # Limit to first 10 for performance
+                    if hasattr(shap_values, '__len__') and len(shap_values) > 1:
+                        # For classification models
+                        shap_arr = shap_values[1][i] if len(shap_values) == 2 else shap_values[i]
+                    else:
+                        shap_arr = shap_values[i]
+                    
+                    # Get top contributing features
+                    feature_contributions = pd.DataFrame({
+                        'feature': df_processed.columns,
+                        'contribution': shap_arr
+                    }).sort_values('contribution', key=abs, ascending=False)
+                    
+                    top_pos = feature_contributions.head(top_features//2)
+                    top_neg = feature_contributions.tail(top_features//2)
+                    top_features_combined = pd.concat([top_pos, top_neg])
+                    
+                    results.at[i, 'top_contributing_features'] = json.dumps(
+                        top_features_combined.set_index('feature')['contribution'].to_dict()
+                    )
+        except Exception as e:
+            print(f"SHAP explanation failed: {e}")
+            results['top_contributing_features'] = None
         
         return results
     
-    def evaluate_threshold(self, 
-                          data: pd.DataFrame,
-                          true_labels: pd.Series,
-                          thresholds: List[float] = None) -> pd.DataFrame:
-        """Evaluate model performance at different thresholds."""
+    def predict_batch(self, filepath: str, output_path: str = None) -> pd.DataFrame:
+        """
+        Predict on a batch of data from file.
         
-        if thresholds is None:
-            thresholds = np.arange(0.1, 0.9, 0.05)
-        
-        results = []
-        probabilities = self.predict_proba(data, calibrated=False)
-        
-        for threshold in thresholds:
-            predictions = (probabilities >= threshold).astype(int)
+        Args:
+            filepath: Path to input CSV file
+            output_path: Path to save predictions
             
-            # Calculate metrics
-            
-            metrics = {
-                'threshold': threshold,
-                'accuracy': accuracy_score(true_labels, predictions),
-                'precision': precision_score(true_labels, predictions, zero_division=0),
-                'recall': recall_score(true_labels, predictions, zero_division=0),
-                'f1': f1_score(true_labels, predictions, zero_division=0),
-                'default_rate': predictions.mean(),
-                'true_default_rate': true_labels.mean()
-            }
-            
-            results.append(metrics)
+        Returns:
+            DataFrame with predictions
+        """
+        print(f"Loading batch data from {filepath}...")
+        df = pd.read_csv(filepath)
         
-        return pd.DataFrame(results)
+        print(f"Making predictions on {len(df)} samples...")
+        results = self.predict_with_explanations(df)
+        
+        # Combine with original data
+        output_df = pd.concat([df, results], axis=1)
+        
+        # Save predictions
+        if output_path:
+            output_df.to_csv(output_path, index=False)
+            print(f"Predictions saved to {output_path}")
+        
+        # Print summary
+        print(f"\nPrediction Summary:")
+        print(f"Total samples: {len(output_df)}")
+        print(f"High risk predictions: {output_df['prediction'].sum()} "
+              f"({output_df['prediction'].mean():.2%})")
+        print(f"Risk level distribution:")
+        print(output_df['risk_level'].value_counts().sort_index())
+        
+        return output_df
     
-    def save_predictions(self, 
-                        predictions: Union[List[Dict], pd.DataFrame],
-                        filepath: str,
-                        format: str = 'csv'):
-        """Save predictions to file."""
+    def evaluate_custom_threshold(self, df: pd.DataFrame, true_labels: pd.Series,
+                                threshold: float) -> Dict:
+        """
+        Evaluate predictions with custom threshold.
         
-        if isinstance(predictions, list):
-            predictions = pd.DataFrame(predictions)
+        Args:
+            df: Input features
+            true_labels: True labels
+            threshold: Custom threshold
+            
+        Returns:
+            Dictionary of evaluation metrics
+        """
+        from sklearn.metrics import (classification_report, confusion_matrix,
+                                   roc_auc_score, f1_score, precision_score,
+                                   recall_score)
         
-        if format.lower() == 'csv':
-            predictions.to_csv(filepath, index=False)
-        elif format.lower() == 'json':
-            predictions.to_json(filepath, orient='records', indent=2)
-        elif format.lower() == 'parquet':
-            predictions.to_parquet(filepath, index=False)
-        else:
-            raise ValueError(f"Unsupported format: {format}")
+        # Make predictions with custom threshold
+        proba = self.predict(df, return_proba=True)
+        predictions = (proba >= threshold).astype(int)
         
-        logger.info(f"Saved predictions to {filepath}")
-
-
-# Factory function for easy predictor creation
-def create_predictor(config: Dict[str, Any] = None) -> CreditRiskPredictor:
-    """Create predictor with configuration."""
-    
-    if config is None:
-        config = {
-            'model_path': 'models/best_model.pkl',
-            'preprocessor_path': 'models/preprocessor.pkl',
-            'threshold': 0.5,
-            'calibration_data_path': 'data/processed/calibration_data.csv'
+        # Calculate metrics
+        metrics = {
+            'threshold': threshold,
+            'roc_auc': roc_auc_score(true_labels, proba),
+            'f1_score': f1_score(true_labels, predictions),
+            'precision': precision_score(true_labels, predictions),
+            'recall': recall_score(true_labels, predictions),
+            'accuracy': (predictions == true_labels).mean()
         }
-    
-    return CreditRiskPredictor(**config)
+        
+        # Confusion matrix
+        cm = confusion_matrix(true_labels, predictions)
+        metrics['confusion_matrix'] = {
+            'true_negatives': int(cm[0, 0]),
+            'false_positives': int(cm[0, 1]),
+            'false_negatives': int(cm[1, 0]),
+            'true_positives': int(cm[1, 1])
+        }
+        
+        print(f"\nEvaluation with threshold = {threshold:.3f}:")
+        print(f"ROC-AUC: {metrics['roc_auc']:.4f}")
+        print(f"F1-Score: {metrics['f1_score']:.4f}")
+        print(f"Precision: {metrics['precision']:.4f}")
+        print(f"Recall: {metrics['recall']:.4f}")
+        print(f"Accuracy: {metrics['accuracy']:.4f}")
+        print("\nConfusion Matrix:")
+        print(f"TN: {cm[0, 0]}, FP: {cm[0, 1]}")
+        print(f"FN: {cm[1, 0]}, TP: {cm[1, 1]}")
+        
+        return metrics
 
 
 def main():
-    """Example usage of the predictor."""
+    """Main function for prediction."""
+    import argparse
+    import os
     
-    # Create predictor
-    predictor = create_predictor()
+    parser = argparse.ArgumentParser(description='Make credit risk predictions')
+    parser.add_argument('--input', type=str, required=True,
+                       help='Path to input CSV file')
+    parser.add_argument('--model', type=str, 
+                       default='../models/gradient_boosting_model.pkl',
+                       help='Path to trained model')
+    parser.add_argument('--preprocessor', type=str,
+                       default='../data/processed/preprocessor.pkl',
+                       help='Path to preprocessor')
+    parser.add_argument('--output', type=str,
+                       default='../predictions/predictions.csv',
+                       help='Path to save predictions')
+    parser.add_argument('--threshold', type=float, default=None,
+                       help='Custom threshold for classification')
     
-    # Example single prediction
-    sample_data = {
-        'age': 35,
-        'income': 50000,
-        'debt': 10000,
-        'credit_score': 720,
-        'employment_length': 5,
-        'savings': 20000
-    }
+    args = parser.parse_args()
     
-    print("Single prediction example:")
-    prediction = predictor.predict_with_confidence(sample_data)
-    print(json.dumps(prediction[0], indent=2))
+    # Create output directory if it doesn't exist
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
     
-    # Batch prediction example
-    print("\nBatch prediction example:")
-    try:
-        results = predictor.batch_predict(
-            filepath='data/processed/test_data.csv',
-            output_path='data/predictions/batch_predictions.csv'
-        )
-        print(f"Batch predictions completed: {len(results)} records")
-        
-        # Get statistics
-        stats = predictor.get_prediction_stats()
-        print(f"\nPrediction statistics: {stats}")
-        
-    except FileNotFoundError:
-        print("Test data file not found, skipping batch prediction")
+    # Initialize predictor
+    predictor = CreditRiskPredictor(model_path=args.model, 
+                                   preprocessor_path=args.preprocessor)
     
-    return predictor
+    # Load and predict
+    df = pd.read_csv(args.input)
+    
+    if args.threshold is not None:
+        # Update threshold if provided
+        predictor.model_info['threshold'] = args.threshold
+        print(f"Using custom threshold: {args.threshold}")
+    
+    # Make predictions
+    results = predictor.predict_batch(args.input, args.output)
+    
+    print("\nPrediction completed successfully!")
+    
+    # Show sample predictions
+    print("\nSample predictions:")
+    sample_cols = ['prediction', 'probability', 'risk_level']
+    if 'TransactionId' in df.columns:
+        sample_cols.insert(0, 'TransactionId')
+    if 'CustomerId' in df.columns:
+        sample_cols.insert(1, 'CustomerId')
+    
+    display_cols = [col for col in sample_cols if col in results.columns]
+    print(results[display_cols].head(10).to_string(index=False))
 
 
-if __name__ == "__main__":
-    predictor = main()
+if __name__ == '__main__':
+    main()
