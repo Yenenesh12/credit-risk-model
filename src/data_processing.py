@@ -1,8 +1,3 @@
-"""
-Data processing pipeline for credit risk modeling.
-Implements feature engineering, missing value imputation, and preprocessing.
-"""
-
 import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -322,7 +317,7 @@ if __name__ == "__main__":
     
     # Load and preprocess data
     X, y, preprocessor = load_and_preprocess_data(
-        'data/raw/credit_data.csv',
+        r'C:\Users\admin\credit-risk-model\data\raw\data.csv',
         config
     )
     

@@ -1,8 +1,3 @@
-"""
-Inference pipeline for credit risk model predictions.
-Includes batch and real-time prediction capabilities.
-"""
-
 import pandas as pd
 import numpy as np
 import joblib
@@ -11,7 +6,9 @@ import logging
 from datetime import datetime
 import json
 from scipy import stats
-
+from sklearn.isotonic import IsotonicRegression
+from sklearn.metrics import (accuracy_score, precision_score, 
+                                        recall_score, f1_score, roc_auc_score)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -62,7 +59,6 @@ class CreditRiskPredictor:
             return probabilities
         
         try:
-            from sklearn.isotonic import IsotonicRegression
             
             # Fit isotonic regression on calibration data
             X_calib = self.preprocess(self.calibration_data.drop(columns=['target'], errors='ignore'))
@@ -323,8 +319,6 @@ class CreditRiskPredictor:
             predictions = (probabilities >= threshold).astype(int)
             
             # Calculate metrics
-            from sklearn.metrics import (accuracy_score, precision_score, 
-                                        recall_score, f1_score, roc_auc_score)
             
             metrics = {
                 'threshold': threshold,

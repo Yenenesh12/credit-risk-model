@@ -1,8 +1,3 @@
-"""
-Model training pipeline for credit risk modeling.
-Implements multiple algorithms with cross-validation and hyperparameter tuning.
-"""
-
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
@@ -28,7 +23,7 @@ import json
 from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from imblearn.over_sampling import SMOTE
 warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -152,7 +147,7 @@ class CreditRiskModelTrainer:
             }
         
         if use_smote:
-            from imblearn.over_sampling import SMOTE
+            
             smote = SMOTE(**smote_params)
             X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
             logger.info(f"After SMOTE - Train shape: {X_train_resampled.shape}")

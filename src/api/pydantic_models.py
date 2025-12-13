@@ -1,7 +1,3 @@
-"""
-Pydantic models for API request/response validation.
-"""
-
 from pydantic import BaseModel, Field, validator, confloat, conint
 from typing import List, Optional, Dict, Any
 from datetime import datetime

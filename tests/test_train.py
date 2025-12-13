@@ -1,7 +1,3 @@
-"""
-Unit tests for model training module.
-"""
-
 import pytest
 import pandas as pd
 import numpy as np
@@ -10,7 +6,7 @@ import sys
 import os
 import tempfile
 import json
-
+import joblib
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
@@ -274,7 +270,7 @@ class TestCreditRiskModelTrainer:
         assert model_path.exists()
         
         # Load model and compare predictions
-        import joblib
+        
         loaded_model = joblib.load(model_path)
         
         # Make predictions with both models

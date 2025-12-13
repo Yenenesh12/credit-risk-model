@@ -1,14 +1,10 @@
-"""
-Unit tests for data processing module.
-"""
-
 import pytest
 import pandas as pd
 import numpy as np
 from sklearn.datasets import make_classification
 import sys
 import os
-
+import joblib
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
@@ -275,7 +271,7 @@ class TestIntegration:
         
         # Save pipeline
         pipeline_path = tmp_path / "pipeline.pkl"
-        import joblib
+        
         joblib.dump(preprocessor, pipeline_path)
         
         # Load pipeline

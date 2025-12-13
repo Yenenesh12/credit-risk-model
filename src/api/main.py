@@ -1,8 +1,3 @@
-"""
-FastAPI application for credit risk model serving.
-Provides REST API for model predictions.
-"""
-
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
