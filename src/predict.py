@@ -11,6 +11,11 @@ from typing import Dict, List, Tuple, Union, Optional
 import warnings
 warnings.filterwarnings('ignore')
 import shap
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import (classification_report, confusion_matrix,
+                                   roc_auc_score, f1_score, precision_score,
+                                   recall_score)
 class CreditRiskPredictor:
     """Credit risk predictor for inference."""
     
@@ -74,9 +79,7 @@ class CreditRiskPredictor:
         
         df = df.copy()
         
-        # Load preprocessor components
-        from sklearn.preprocessing import StandardScaler, OneHotEncoder
-        from sklearn.impute import SimpleImputer
+      
         
         # Get feature lists from config
         config = self.preprocessor.get('config', {})
@@ -282,10 +285,6 @@ class CreditRiskPredictor:
         Returns:
             Dictionary of evaluation metrics
         """
-        from sklearn.metrics import (classification_report, confusion_matrix,
-                                   roc_auc_score, f1_score, precision_score,
-                                   recall_score)
-        
         # Make predictions with custom threshold
         proba = self.predict(df, return_proba=True)
         predictions = (proba >= threshold).astype(int)
