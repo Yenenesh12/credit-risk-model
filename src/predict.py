@@ -331,10 +331,10 @@ def main():
     parser.add_argument('--input', type=str, required=True,
                        help='Path to input CSV file')
     parser.add_argument('--model', type=str, 
-                       default='../models/gradient_boosting_model.pkl',
+                       default=r'C:\Users\admin\credit-risk-model\models\gradient_boosting_model.pkl',
                        help='Path to trained model')
     parser.add_argument('--preprocessor', type=str,
-                       default='../data/processed/preprocessor.pkl',
+                       default=r'C:\Users\admin\credit-risk-model\data\processed\preprocessor.pkl',
                        help='Path to preprocessor')
     parser.add_argument('--output', type=str,
                        default='../predictions/predictions.csv',
