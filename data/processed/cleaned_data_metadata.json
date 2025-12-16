@@ -1,0 +1,1 @@
+{"original_shape":[5000,18],"original_columns":["PolicyID","TransactionMonth","Province","VehicleType","Gender","Make","Model","TotalPremium","TotalClaims","CustomValueEstimate","SumInsured","CalculatedPremiumPerTerm","CoverType","RegistrationYear","NumberOfDoors","Bodytype","MaritalStatus","LossRatio"]}

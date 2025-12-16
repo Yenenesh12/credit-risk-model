@@ -1,0 +1,38 @@
+# config/config.yaml
+data:
+  
+  raw_path: "data/raw/insurance_data.csv"
+  processed_path: "data/processed/cleaned_data.parquet"
+
+analysis:
+  date_column: "TransactionMonth"
+  target_columns:
+    - "TotalPremium"
+    - "TotalClaims"
+  categorical_columns:
+    - "Province"
+    - "VehicleType"
+    - "Gender"
+    - "CoverType"
+    - "Make"
+    - "Model"
+  numerical_columns:
+    - "TotalPremium"
+    - "TotalClaims"
+    - "CustomValueEstimate"
+    - "SumInsured"
+    - "CalculatedPremiumPerTerm"
+
+visualization:
+  style: "seaborn-v0_8-darkgrid"
+  palette: "husl"
+  figsize:
+    small: [10, 6]
+    medium: [12, 8]
+    large: [14, 10]
+  dpi: 300
+
+dvc:
+  remote_storage: "config/local_storage"
+  tracked_files:
+    - "data/raw/insurance_data.csv"

@@ -1,0 +1,51 @@
+stages:
+  load_data:
+    cmd: python scripts/load_and_preprocess.py
+    deps:
+      - scripts/load_and_preprocess.py
+      - config/config.yaml
+      - data/raw/insurance_data.csv
+    outs:
+      - data/processed/cleaned_data.parquet
+      - data/processed/data_metadata.json
+
+  run_eda:
+    cmd: python scripts/run_eda.py
+    deps:
+      - scripts/run_eda.py
+      - data/processed/cleaned_data.parquet
+    outs:
+      - reports/figures/data_quality_summary.png
+      - reports/figures/correlation_matrix.png
+      - reports/figures/numeric_distributions.png
+      - reports/figures/categorical_distributions.png
+      - reports/figures/loss_ratio_analysis.png
+      - reports/figures/temporal_trends.png
+      - reports/figures/outlier_analysis.png
+      - reports/docs/eda_summary.json
+      - reports/docs/eda_report.html
+
+  generate_report:
+    cmd: python scripts/generate_report.py
+    deps:
+      - scripts/generate_report.py
+      - reports/figures/data_quality_summary.png
+      - reports/docs/eda_summary.json
+    outs:
+      - reports/final_report.pdf
+      - reports/summary_insights.md
+
+metrics:
+  - reports/metrics.json
+
+plots:
+  - reports/metrics.json:
+      x: analysis_timestamp
+      y: overall_loss_ratio
+  - reports/figures/data_quality_summary.png
+  - reports/figures/correlation_matrix.png
+  - reports/figures/numeric_distributions.png
+  - reports/figures/categorical_distributions.png
+  - reports/figures/loss_ratio_analysis.png
+  - reports/figures/temporal_trends.png
+  - reports/figures/outlier_analysis.png

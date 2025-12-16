@@ -1,0 +1,38 @@
+{
+  "processing_date": "2025-12-06 14:15:31.660689",
+  "original_shape": [
+    5000,
+    18
+  ],
+  "processed_shape": [
+    4563,
+    23
+  ],
+  "missing_values_original": 524,
+  "missing_values_processed": 476,
+  "columns_processed": [
+    "PolicyID",
+    "TransactionMonth",
+    "Province",
+    "VehicleType",
+    "Gender",
+    "Make",
+    "Model",
+    "TotalPremium",
+    "TotalClaims",
+    "CustomValueEstimate",
+    "SumInsured",
+    "CalculatedPremiumPerTerm",
+    "CoverType",
+    "RegistrationYear",
+    "NumberOfDoors",
+    "Bodytype",
+    "MaritalStatus",
+    "LossRatio",
+    "TransactionYear",
+    "TransactionMonthNum",
+    "TransactionQuarter",
+    "ClaimFrequency",
+    "PremiumToSumInsuredRatio"
+  ]
+}

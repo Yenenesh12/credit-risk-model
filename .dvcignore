@@ -1,0 +1,10 @@
+# Ignore temporary and system files
+*.tmp
+*.log
+__pycache__/
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.pyc

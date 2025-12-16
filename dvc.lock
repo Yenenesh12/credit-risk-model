@@ -1,0 +1,26 @@
+schema: '2.0'
+stages:
+  load_data:
+    cmd: python scripts/load_and_preprocess.py
+    deps:
+    - path: config/config.yaml
+      hash: md5
+      md5: a4d1085c82259b15f84a89d55bb7da3b
+      size: 778
+    - path: data/raw/insurance_data.csv
+      hash: md5
+      md5: 797e8097f8376a13e7949a4300453e38
+      size: 922186
+    - path: scripts/load_and_preprocess.py
+      hash: md5
+      md5: d4297365c4648fcb05058335705656c8
+      size: 2164
+    outs:
+    - path: data/processed/cleaned_data.parquet
+      hash: md5
+      md5: e9af983149e84a073dae1eb75e6d0bde
+      size: 342547
+    - path: data/processed/data_metadata.json
+      hash: md5
+      md5: 6302d9241b1977bd6b368963e27b2f92
+      size: 753
