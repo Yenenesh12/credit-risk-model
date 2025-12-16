@@ -4,7 +4,7 @@
 
 This project conducts comprehensive exploratory data analysis (EDA) on insurance data from February 2014 to August 2015,
 
-implementing Data Version Control (DVC) for reproducible workflows. The analysis focuses on identifying risk patterns, 
+implementing Data Version Control (DVC) for reproducible workflows. The analysis focuses on identifying risk patterns,
 
 profitability factors, and temporal trends in insurance claims data.
 
@@ -58,7 +58,7 @@ insurance-risk-analysis/
 
 ├── tests/                 # Unit tests
 
-└── .github/workflows/    # CI/CD pipelines 
+└── .github/workflows/    # CI/CD pipelines
 
 🚀 Quick Start
 
@@ -106,19 +106,19 @@ python scripts/setup_dvc.py
 
 📈 Running the Analysis
 
-Option 1: Complete EDA via Jupyter Notebook 
+Option 1: Complete EDA via Jupyter Notebook
 
 jupyter notebook notebooks/01_comprehensive_eda.ipynb
 
-# Execute all cells for comprehensive analysis 
+# Execute all cells for comprehensive analysis
 
-Option 2: Automated EDA via Script 
+Option 2: Automated EDA via Script
 
 python scripts/run_eda.py
 
-# This generates all visualizations and reports in reports/ directory 
+# This generates all visualizations and reports in reports/ directory
 
-Option 3: Full DVC Pipeline 
+Option 3: Full DVC Pipeline
 
 # Initialize DVC (if not already done)
 
@@ -128,7 +128,7 @@ dvc remote add -d localstorage config/local_storage
 
 # Run the complete reproducible pipeline
 
-dvc repro 
+dvc repro
 
 📊 Analysis Outputs
 
@@ -160,7 +160,7 @@ reports/metrics.json - Key performance metrics
 
 🔧 DVC Configuration
 
-Data Version Control Setup 
+Data Version Control Setup
 
 # Install DVC
 
@@ -190,7 +190,7 @@ git commit -m "Add DVC tracked files"
 
 # Push data to remote storage
 
-dvc push 
+dvc push
 
 DVC Pipeline
 
@@ -199,7 +199,7 @@ DVC Pipeline
 stages:
   load_data: Preprocess and clean data
   run_eda: Execute comprehensive EDA
-  generate_report: Create summary reports 
+  generate_report: Create summary reports
 
 # Run the pipeline:
 
@@ -267,7 +267,7 @@ Configuration Management: YAML config files for all settings
 
 Error Handling: Robust exception handling and validation
 
-🧪 Testing 
+🧪 Testing
 
 # Run unit tests
 
@@ -357,7 +357,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 👥 Authors
 
-Saron Zeleke
+Yenenesh Dabot
 
 🙏 Acknowledgments
 
